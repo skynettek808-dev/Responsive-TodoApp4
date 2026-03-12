@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TodoApp</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --bg:#f0f2f5; --card:white; --text:black; --button:#1a73e8;
+}
+body.dark{
+  --bg:#121212; --card:#1e1e1e; --text:#ffffff; --button:#3a8cff;
+}
+body{
+  font-family: Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+.container{
+  background: var(--card);
+  padding: 25px;
+  border-radius: 10px;
+  width: 450px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+h2{text-align:center;}
+button{
+  background: var(--button);
+  color: white;
+  border: none;
+  cursor: pointer;
+  padding: 12px;
+  margin-top: 10px;
+  width: 100%;
+  border-radius: 8px;
+  font-size: 16px;
+}
+button:hover{background:#0c4db3;}
+input, select{
+  padding:10px; border-radius:6px; border:1px solid #ccc; box-sizing:border-box;
+}
+ul{list-style:none;padding:0;}
+li{padding:10px;margin-top:8px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}
+li.pending{background:#ffe066;color:black;}
+li.completed{background:#2ecc71;color:white;}
+.deleteBtn{background:red;color:white;padding:6px 10px;border-radius:4px;cursor:pointer;margin-left:4px;}
+.archiveBtn{background:#555;color:white;padding:6px 10px;border-radius:4px;cursor:pointer;margin-left:4px;}
+.smallBtn{background:#3498db;color:white;padding:6px 10px;border-radius:4px;cursor:pointer;margin-left:4px;font-size:12px;}
+.smallBtn:hover{background:#217dbb;}
+.task-inputs{display:flex; gap:10px; margin-bottom:10px;}
+.task-inputs input{flex:2;}
+.score{margin-top:10px;text-align:center;font-size:16px;font-weight:bold;}
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px;}
+.day{background:#f1f1f1;padding:6px;border-radius:4px;text-align:center;font-size:12px;}
+canvas{margin-top:15px;width:100% !important; height:200px !important;}
+.tab-buttons{display:flex;justify-content:space-between;margin-top:15px;}
+.tab-buttons button{width:23%;padding:6px 0;font-size:12px;}
+.hidden{display:none;}
+</style>
+</head>
+<body>
+
+<!-- Home Page -->
+<div class="container" id="homePage">
+  <h2>TodoApp</h2>
+  <button onclick="showPage('todoPage')">Todo</button>
+  <button onclick="showPage('financePage')">Finance</button>
+</div>
+
+<!-- Todo Page -->
+<div class="container hidden" id="todoPage">
+  <h2>Todo Section</h2>
+  <button onclick="toggleDark()">🌙 Toggle Dark Mode</button>
+
+  <!-- Task Input Section -->
+  <div class="task-inputs">
+    <input id="taskText" placeholder="Enter task here...">
+    <button class="smallBtn" onclick="document.getElementById('taskDate').focus()">Add Date</button>
+    <button class="smallBtn" onclick="document.getElementById('taskTime').focus()">Add Time</button>
+  </div>
+  <div style="display:flex; gap:10px; margin-bottom:10px;">
+    <input type="date" id="taskDate" style="flex:1;">
+    <input type="time" id="taskTime" style="flex:1;">
+  </div>
+  <button onclick="addTask()">Add Task</button>
+
+  <div class="tab-buttons">
+    <button onclick="setTaskRange('daily')">Daily</button>
+    <button onclick="setTaskRange('weekly')">Weekly</button>
+    <button onclick="setTaskRange('yearly')">1 Yr</button>
+    <button onclick="setTaskRange('5year')">5 Yr</button>
+  </div>
+
+  <div class="score">Productivity Score: <span id="score">0%</span></div>
+  <ul id="taskList"></ul>
+  <canvas id="taskChart"></canvas>
+  <h3>Calendar View</h3>
+  <div id="calendar" class="calendar"></div>
+
+  <button onclick="showPage('homePage')">Back to Home</button>
+</div>
+
+<!-- Finance Page -->
+<div class="container hidden" id="financePage">
+  <h2>Finance Section</h2>
+  <input id="financeSource" placeholder="Income/Expense source">
+  <input type="number" id="financeAmount" placeholder="Amount">
+  <select id="financeType">
+    <option value="income">Income</option>
+    <option value="expense">Expense</option>
+  </select>
+  <button onclick="addFinance()">Add Record</button>
+
+  <div class="tab-buttons">
+    <button onclick="setFinanceRange('daily')">Daily</button>
+    <button onclick="setFinanceRange('weekly')">Weekly</button>
+    <button onclick="setFinanceRange('yearly')">1 Yr</button>
+    <button onclick="setFinanceRange('5year')">5 Yr</button>
+  </div>
+
+  <ul id="financeList"></ul>
+  <canvas id="financeChart"></canvas>
+  <canvas id="financePieChart"></canvas>
+
+  <button onclick="showPage('homePage')">Back to Home</button>
+</div>
+
+<script>
+// Navigation
+function showPage(id){
+  document.getElementById("homePage").classList.add("hidden");
+  document.getElementById("todoPage").classList.add("hidden");
+  document.getElementById("financePage").classList.add("hidden");
+  document.getElementById(id).classList.remove("hidden");
+}
+
+// Dark Mode
+function toggleDark(){document.body.classList.toggle("dark");}
+
+// Local Storage
+let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+let finance = JSON.parse(localStorage.getItem("finance")) || [];
+function save(){localStorage.setItem("tasks",JSON.stringify(tasks)); localStorage.setItem("finance",JSON.stringify(finance));}
+
+// Task Range
+let taskRange='weekly';
+function setTaskRange(range){taskRange=range; renderTasks(); updateTaskChart(); updateScore(); buildCalendar();}
+
+// Finance Range
+let financeRange='weekly';
+function setFinanceRange(range){financeRange=range; renderFinance(); updateFinanceChart(); updateFinancePie();}
+
+// --- Todo Functions ---
+function addTask(){
+  let text=document.getElementById("taskText").value;
+  let date=document.getElementById("taskDate").value;
+  let time=document.getElementById("taskTime").value;
+  if(text==="") return;
+  tasks.push({text,date,time,completed:false,archived:false,timestamp:Date.now()});
+  save(); renderTasks(); updateTaskChart(); updateScore(); buildCalendar();
+  document.getElementById("taskText").value=""; document.getElementById("taskDate").value=""; document.getElementById("taskTime").value="";
+}
+
+function renderTasks(){
+  const list=document.getElementById("taskList"); list.innerHTML="";
+  tasks.filter(t=>!t.archived && filterByRange(t.timestamp,taskRange)).forEach(task=>{
+    let li=document.createElement("li");
+    li.className=task.completed?"completed":"pending";
+    let span=document.createElement("span");
+    span.innerText = task.completed ? "Completed" : task.text+" ("+task.date+" "+task.time+")";
+    span.onclick=()=>{if(!task.completed){task.completed=true; save(); renderTasks(); updateTaskChart(); updateScore(); buildCalendar();}};
+    
+    let archive=document.createElement("button"); archive.className="archiveBtn"; archive.innerText="Archive";
+    archive.onclick=()=>{task.archived=true; save(); renderTasks(); updateTaskChart(); updateScore(); buildCalendar();};
+    
+    let del=document.createElement("button"); del.className="deleteBtn"; del.innerText="Delete";
+    del.onclick=()=>{tasks.splice(tasks.indexOf(task),1); save(); renderTasks(); updateTaskChart(); updateScore(); buildCalendar();};
+    
+    li.appendChild(span); li.appendChild(archive); li.appendChild(del);
+    list.appendChild(li);
+  });
+}
+
+function updateScore(){
+  let total=tasks.filter(t=>!t.archived).length;
+  let completed=tasks.filter(t=>t.completed).length;
+  let score=total>0?Math.round((completed/total)*100):0;
+  document.getElementById("score").innerText=score+"%";
+}
+
+function buildCalendar(){
+  let cal=document.getElementById("calendar"); cal.innerHTML="";
+  for(let i=1;i<=31;i++){
+    let day=document.createElement("div"); day.className="day";
+    let count=tasks.filter(t=>t.date && new Date(t.date).getDate()==i && filterByRange(t.timestamp,taskRange)).length;
+    day.innerText=i+(count?("("+count+")"):""); cal.appendChild(day);
+  }
+}
+
+// Task Chart
+const taskCtx = document.getElementById("taskChart");
+let taskChart = new Chart(taskCtx,{type:"line",data:{labels:[], datasets:[{label:"Tasks Completed", data:[], borderColor:"green", backgroundColor:"rgba(0,200,0,0.1)", tension:0.3}]}, options:{responsive:true, plugins:{legend:{display:true}}, scales:{y:{beginAtZero:true}}}});
+function updateTaskChart(){
+  let days=[],counts=[];
+  let rangeDays=getRangeDays(taskRange);
+  rangeDays.forEach(day=>{
+    let label=day.getMonth()+1+"/"+day.getDate();
+    let count=tasks.filter(t=>t.completed && filterByRange(t.timestamp,taskRange) && new Date(t.timestamp).toDateString()==day.toDateString()).length;
+    days.push(label); counts.push(count);
+  });
+  taskChart.data.labels=days;
+  taskChart.data.datasets[0].data=counts;
+  taskChart.update();
+}
+
+// --- Finance ---
+function addFinance(){
+  let src=document.getElementById("financeSource").value;
+  let amt=parseFloat(document.getElementById("financeAmount").value);
+  let type=document.getElementById("financeType").value;
+  if(src==""||isNaN(amt)) return;
+  finance.push({source:src,amount:amt,type,timestamp:Date.now()});
+  save(); renderFinance(); updateFinanceChart(); updateFinancePie();
+  document.getElementById("financeSource").value=""; document.getElementById("financeAmount").value="";
+}
+
+function renderFinance(){
+  const list=document.getElementById("financeList"); list.innerHTML="";
+  finance.filter(f=>filterByRange(f.timestamp,financeRange)).forEach(f=>{
+    let li=document.createElement("li"); li.innerText=`${f.type.toUpperCase()}: ${f.source} → $${f.amount}`;
+    let del=document.createElement("button"); del.className="deleteBtn"; del.innerText="Delete";
+    del.onclick=()=>{finance.splice(finance.indexOf(f),1); save(); renderFinance(); updateFinanceChart(); updateFinancePie();};
+    li.appendChild(del); list.appendChild(li);
+  });
+}
+
+// Finance Charts
+const financeCtx=document.getElementById("financeChart");
+let financeChart=new Chart(financeCtx,{type:"line",data:{labels:[], datasets:[{label:"Net Gain/Loss", data:[], borderColor:"blue", backgroundColor:"rgba(0,0,255,0.1)", tension:0.3}]}, options:{responsive:true, plugins:{legend:{display:true}}, scales:{y:{beginAtZero:true}}}});
+const financePieCtx=document.getElementById("financePieChart");
+let financePie=new Chart(financePieCtx,{type:"pie", data:{labels:[], datasets:[{data:[], backgroundColor:["#3498db","#e74c3c"], label:"Income vs Expense"}]}, options:{responsive:true}});
+
+function updateFinanceChart(){
+  let days=[],net=[];
+  getRangeDays(financeRange).forEach(day=>{
+    let label=day.getMonth()+1+"/"+day.getDate(); let total=0;
+    finance.forEach(f=>{if(filterByRange(f.timestamp,financeRange) && new Date(f.timestamp).toDateString()==day.toDateString()){total+=f.type=="income"?f.amount:-f.amount;}});
+    days.push(label); net.push(total);
+  });
+  financeChart.data.labels=days; financeChart.data.datasets[0].data=net; financeChart.update();
+}
+
+function updateFinancePie(){
+  let income=0,expense=0; finance.forEach(f=>{if(filterByRange(f.timestamp,financeRange)){if(f.type=="income") income+=f.amount; else expense+=f.amount;}});
+  financePie.data.labels=["Income","Expense"]; financePie.data.datasets[0].data=[income,expense]; financePie.update();
+}
+
+// Helpers
+function filterByRange(timestamp,range){
+  let now=Date.now(); let cutoff;
+  switch(range){
+    case'daily': cutoff=now-86400000; break;
+    case'weekly': cutoff=now-604800000; break;
+    case'yearly': cutoff=now-31536000000; break;
+    case'5year': cutoff=now-157680000000; break;
+    default: cutoff=0;
+  }
+  return timestamp>=cutoff;
+}
+
+function getRangeDays(range){
+  let arr=[]; let now=new Date();
+  let days=range==='daily'?1:range==='weekly'?7:range==='yearly'?365:range==='5year'?1825:7;
+  for(let i=days-1;i>=0;i--){
+    let d=new Date(); d.setDate(now.getDate()-i); arr.push(d);
+  }
+  return arr;
+}
+
+// Initialize
+renderTasks(); updateTaskChart(); updateScore(); buildCalendar();
+renderFinance(); updateFinanceChart(); updateFinancePie();
+</script>
+</body>
+</html>
